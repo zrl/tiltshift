@@ -5,22 +5,6 @@ import cv2
 import numpy as np
 
 
-def gen_top_filter(k):
-    out_array = np.zeros((k, k))
-
-    for i in range(k):
-        out_array[i].fill(k - i)
-    return out_array / out_array.sum()
-
-
-def gen_bot_filter(k):
-    out_array = np.zeros((k, k))
-
-    for i in range(k):
-        out_array[i].fill(i + 1)
-    return out_array / out_array.sum()
-
-
 class Image:
     n_kern = 19
     kernels = [1 + (4 * x) for x in range(n_kern)]
@@ -34,6 +18,9 @@ class Image:
         self.width = self.image_array.shape[1]
         self.linear_center = self.height // 2
         self.tiltshift_radius = self.height // 50
+        self.top_split = []
+        self.bottom_split = []
+        self.center = ()
 
     def write(self, filename):
         cv2.imwrite(filename, self.image_array)
@@ -53,62 +40,68 @@ class Image:
 
         top = 0 if top < 0 else top
         bottom = self.height if bottom > self.height else bottom
-        center = (top, bottom)
-        return center
+        self.center = (top, bottom)
 
     def define_blur_ranges(self):
-        center = self.define_center()
-        top_width = center[0]
-        bottom_width = self.height - center[1]
+        top_width = self.center[0]
+        bottom_width = self.height - self.center[1]
 
         if top_width > bottom_width:
             blur_width = top_width // Image.n_kern
-            top_split = [blur_width * x for x in range(len(Image.kernels) + 1)]
-            bottom_split = [center[1]]
+            ttop_split = [blur_width * x for x in range(len(Image.kernels) + 1)]
+            tbottom_split = [self.center[1]]
 
-            while bottom_split[-1] + 2 * blur_width < self.height:
-                bottom_split.append(bottom_split[-1] + blur_width)
-            bottom_split.append(self.height)
+            while tbottom_split[-1] + 2 * blur_width < self.height:
+                tbottom_split.append(tbottom_split[-1] + blur_width)
+            tbottom_split.append(self.height)
 
         else:
             blur_width = bottom_width // Image.n_kern
-            bottom_split = [center[1] + (blur_width * x) for x in range(len(Image.kernels))]
-            bottom_split.append(self.height)
-            top_split = [center[0]]
+            tbottom_split = [self.center[1] + (blur_width * x) for x in range(len(Image.kernels))]
+            tbottom_split.append(self.height)
+            ttop_split = [self.center[0]]
 
-            while top_split[-1] - 2 * blur_width > 0:
-                top_split.append(top_split[-1] - blur_width)
-            top_split.append(0)
+            while ttop_split[-1] - 2 * blur_width > 0:
+                ttop_split.append(ttop_split[-1] - blur_width)
+            ttop_split.append(0)
 
-        top_split.sort()
-        bottom_split.sort(reverse=True)
+        ttop_split.sort()
+        tbottom_split.sort(reverse=True)
 
-        return top_split, bottom_split, center
+        self.top_split = ttop_split
+        self.bottom_split = tbottom_split
 
-    def tiltshift(self):
-        self.check()
-
-        top_split, bottom_split, center = self.define_blur_ranges()
-
+    def apply_blur(self):
         for i in range(len(Image.kernels)):
             curr_k_size = Image.kernels[i]
             current_kernel = (curr_k_size, curr_k_size)
 
-            if i + 1 < len(top_split):
+            if i + 1 < len(self.top_split):
                 NT = curr_k_size if i - curr_k_size >= 0 else 0
                 NB = curr_k_size
-                self.image_array[top_split[i]:top_split[i + 1]] = \
-                    cv2.blur(self.image_array[top_split[i] - NT:top_split[i + 1] + NB], current_kernel,
-                             borderType=cv2.BORDER_REFLECT_101)[NT:abs(top_split[i + 1] - top_split[i]) + NT]
+                self.image_array[self.top_split[i]:self.top_split[i + 1]] = \
+                    cv2.blur(self.image_array[self.top_split[i] - NT:self.top_split[i + 1] + NB], current_kernel,
+                             borderType=cv2.BORDER_REFLECT_101)[NT:abs(self.top_split[i + 1] - self.top_split[i]) + NT]
 
-            if i + 1 < len(bottom_split):
+            if i + 1 < len(self.bottom_split):
                 MT = curr_k_size
                 MB = curr_k_size if i + curr_k_size <= self.height else 0
-                self.image_array[bottom_split[i + 1]:bottom_split[i]] = \
-                    cv2.blur(self.image_array[bottom_split[i + 1] - MT:bottom_split[i] + MB], current_kernel,
-                             borderType=cv2.BORDER_REFLECT_101)[MT:abs(bottom_split[i] - bottom_split[i + 1]) + MT]
+                self.image_array[self.bottom_split[i + 1]:self.bottom_split[i]] = \
+                    cv2.blur(self.image_array[self.bottom_split[i + 1] - MT:self.bottom_split[i] + MB], current_kernel,
+                             borderType=cv2.BORDER_REFLECT_101)[
+                    MT:abs(self.bottom_split[i] - self.bottom_split[i + 1]) + MT]
 
-        self.image_array[:center[0]] = cv2.GaussianBlur(self.image_array[:center[0]], (5, 5), sigmaX=1, sigmaY=5,
-                                                        borderType=cv2.BORDER_REFLECT_101)
-        self.image_array[center[1]:] = cv2.GaussianBlur(self.image_array[center[1]:], (5, 5), sigmaX=1, sigmaY=5,
-                                                        borderType=cv2.BORDER_REFLECT_101)
+    def smooth_blur(self):
+        self.image_array[:self.center[0]] = cv2.GaussianBlur(self.image_array[:self.center[0]], (5, 5), sigmaX=1,
+                                                             sigmaY=5,
+                                                             borderType=cv2.BORDER_REFLECT_101)
+        self.image_array[self.center[1]:] = cv2.GaussianBlur(self.image_array[self.center[1]:], (5, 5), sigmaX=1,
+                                                             sigmaY=5,
+                                                             borderType=cv2.BORDER_REFLECT_101)
+
+    def tiltshift(self):
+        self.check()
+        self.define_center()
+        self.define_blur_ranges()
+        self.apply_blur()
+        self.smooth_blur()
