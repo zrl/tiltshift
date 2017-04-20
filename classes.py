@@ -71,6 +71,7 @@ class Image:
         self.bottom_split = tbottom_split
 
     def apply_blur(self):
+        bk_diff = len(Image.kernels) - len(self.bottom_split)
         for i in range(len(Image.kernels)):
             curr_k_size = Image.kernels[i]
             current_kernel = (curr_k_size, curr_k_size)
@@ -82,13 +83,13 @@ class Image:
                     cv2.blur(self.image_array[self.top_split[i] - NT:self.top_split[i + 1] + NB], current_kernel,
                              borderType=cv2.BORDER_REFLECT_101)[NT:abs(self.top_split[i + 1] - self.top_split[i]) + NT]
 
-            if i + 1 < len(self.bottom_split):
+            if bk_diff < i + 1 < len(self.bottom_split) + bk_diff:
                 MT = curr_k_size
                 MB = curr_k_size if i + curr_k_size <= self.height else 0
-                self.image_array[self.bottom_split[i + 1]:self.bottom_split[i]] = \
-                    cv2.blur(self.image_array[self.bottom_split[i + 1] - MT:self.bottom_split[i] + MB], current_kernel,
+                self.image_array[self.bottom_split[i + 1 - bk_diff]:self.bottom_split[i - bk_diff]] = \
+                    cv2.blur(self.image_array[self.bottom_split[i + 1 - bk_diff] - MT:self.bottom_split[i - bk_diff] + MB], current_kernel,
                              borderType=cv2.BORDER_REFLECT_101)[
-                    MT:abs(self.bottom_split[i] - self.bottom_split[i + 1]) + MT]
+                    MT:abs(self.bottom_split[i - bk_diff] - self.bottom_split[i + 1 - bk_diff]) + MT]
 
     def smooth_blur(self):
         self.image_array[:self.center[0]] = cv2.GaussianBlur(self.image_array[:self.center[0]], (5, 5), sigmaX=1,
