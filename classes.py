@@ -2,7 +2,6 @@
 # Zachary Levin
 
 import cv2
-import numpy as np
 
 
 class Image:

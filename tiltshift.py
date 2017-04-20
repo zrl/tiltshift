@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
         image = Image(path.join(SRC_FOLDER, filename))
         print '{} is {} pixels'.format(filename, image.dimensions())
-        image.linear_center = raw_input('Tiltshift center: ')
-        image.tiltshift_radius = raw_input('Tiltshift radius: ')
+        image.linear_center = int(raw_input('Tiltshift center: '))
+        image.tiltshift_radius = int(raw_input('Tiltshift radius: '))
         image.tiltshift()
         image.write(path.join(OUT_FOLDER, filename))
